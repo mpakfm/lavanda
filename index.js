@@ -140,15 +140,16 @@ class ModuleAbstract {
             }
         }
         console.log(`[module::constructor] sender`, this.sender);
-        if (typeof message.userId == 'undefined' || !message.userId) {
-            throw new TypeError('Unknown property userId in inputMessage');
-        }
         if (typeof message.method == 'undefined' || !message.method) {
             throw new TypeError('Unknown property method in inputMessage');
         }
-        this.userId       = message.userId;
         this.method       = message.method;
         this.inputMessage = message;
+
+        this.userId = null;
+        if (typeof message.userId == 'undefined' || !message.userId) {
+            this.userId = message.userId;
+        }
     }
 
     checkMethod() {
