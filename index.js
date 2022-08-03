@@ -142,22 +142,20 @@ ws.on(`connection`, (socket, req) => {
         let module;
 
         switch (inputMsg.module) {
+            case"user":
+                module = new User(socket.inputId, inputMsg);
+                break;
             case"admin":
-                //console.log('[socket::message] admin');
                 module = new Admin(socket.inputId, inputMsg);
                 break;
             case"notice":
-                //console.log('[socket::message] notice');
                 module = new Notifier(socket.inputId, inputMsg);
                 break;
             case"chat":
-                //console.log('[socket::message] chat');
                 break;
             case"private":
-                //console.log('[socket::message] private');
                 break;
         }
-
         module.exec();
     });
 
@@ -201,6 +199,11 @@ class ModuleAbstract {
                     id:     softClients[i].id,
                     userId: softClients[i].userId
                 };
+                for (var z in userClients) {
+                    if (softClients[i].userId === userClients[z].id) {
+                        this.sender.data = userClients[z];
+                    }
+                }
                 break;
             }
         }
@@ -236,7 +239,38 @@ class ModuleAbstract {
     }
 }
 
-class Admin extends ModuleAbstract{
+class User extends ModuleAbstract {
+    constructor(inputId, message) {
+        super(inputId, message);
+        this.accessMethods = [
+            'setData'
+        ];
+    }
+    setData() {
+        let data    = {};
+        let isAdmin = false;
+        for (var i in this.inputMessage) {
+            if (i === 'module' || i === 'method' || i === 'id') {
+                continue;
+            }
+            if (i === 'isAdmin') {
+                isAdmin = this.inputMessage[i];
+                continue;
+            }
+            data[i] = this.inputMessage[i];
+        }
+        for (var i in userClients) {
+            if (this.sender.userId === userClients[i].id) {
+                userClients[i].isAdmin = isAdmin;
+                userClients[i].data    = data;
+                console.log('[setData] userClients', userClients[i]);
+                return true;
+            }
+        }
+    }
+}
+
+class Admin extends ModuleAbstract {
     constructor(inputId, message) {
         super(inputId, message);
         this.accessMethods = [
@@ -247,6 +281,9 @@ class Admin extends ModuleAbstract{
     exec() {
         try {
             this.checkMethod();
+            if (!this.sender.data.isAdmin) {
+                throw new Error('[Admin::exec] This user is not admin' +  this.sender);
+            }
             switch (this.method) {
                 case "userlist":
                     this.getUserList();
