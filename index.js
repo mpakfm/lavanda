@@ -1,5 +1,3 @@
-// Настройки mysql
-const setup = {port:8000}
 // Подключаем express
 const express = require ('express');
 // создаем приложение
@@ -9,9 +7,16 @@ var dt = new Date();
 
 console.log(dt.getHours() + ":" + dt.getMinutes() + ":" + dt.getSeconds() + "\t" + 'INIT');
 
+var redisPort = 6379;
+var redisHost = '127.0.0.1';
+
+
+const Redis = require("redis");
+
 const WebSocket = require(`ws`);
-const path = require(`path`);
-const http = require(`http`);
+const path  = require(`path`);
+const http  = require(`http`);
+
 const PORT = 3000;
 const server = http.createServer(app);
 const ws = new WebSocket.Server({ server });
@@ -29,41 +34,101 @@ server.listen(PORT, (hostname) => {
 ws.on(`connection`, (socket, req) => {
     const {remoteAddress: ip} = req.socket;
     console.log('===============');
-    console.log('[socket::connection] headers:', req.headers);
-    console.log('===============');
-    if (typeof req.headers.userid === 'undefined' || !req.headers.userid) {
-        console.error('[socket::connection] Unknown userid. Socket close');
+    let sessKey = null;
+    let userId  = null;
+    let softId  = null;
+    if (req.url === '') {
+        console.error('[socket::connection] Unknown userId. Socket close');
         socket.close();
         return;
     }
-    if (!isIdInArray(req.headers.userid, userClients)) {
-        let obj = {
-            'id': req.headers.userid,
-        };
-        userClients.push(obj);
-    } else {
-        console.log('[socket::connection] reconnect userClient', req.headers.userid);
+    let n = req.url.indexOf('?');
+    if (n < 0) {
+        console.error('[socket::connection] Query string is not found. Socket close');
+        socket.close();
+        return;
+    }
+    let query = req.url.slice((n+1)).split('&');
+    if (!query.length) {
+        console.error('[socket::connection] Params not found. Socket close');
+        socket.close();
+        return;
+    }
+    for (let i in query) {
+        let part = query[i].split('=');
+        if (part[0] === 'userId') {
+            userId = part[1];
+        }
+        if (part[0] === 'softId') {
+            softId = part[1];
+        }
+    }
+    console.log('[socket::connection] userId:', userId);
+    console.log('[socket::connection] softId:', softId);
+    console.log('===============');
+    if (!userId || !softId) {
+        console.error('[socket::connection] Unknown userId. Socket close');
+        socket.close();
+        return;
     }
 
-    if (!isIdInArray(req.headers.softid, softClients)) {
-        let obj = {
-            'id':        req.headers.softid,
-            'userId':    req.headers.userid,
-            'inputId':   req.headers.softid + '-' + req.headers.userid,
-            'socket':    socket
-        };
-        socket.inputId = obj.inputId;
-        softClients.push(obj);
+    if (typeof req.headers.sessid === 'undefined' || !req.headers.sessid) {
+        if (typeof req.headers['sec-websocket-protocol'] === 'undefined' || req.headers['sec-websocket-protocol'] === '') {
+            console.error('[socket::connection] Unknown sessKey. Socket close');
+            socket.close();
+            return;
+        } else {
+            sessKey = req.headers['sec-websocket-protocol'];
+        }
     } else {
-        console.log('[socket::connection] reconnect softClient', req.headers.softid);
+        sessKey = req.headers.sessid;
     }
+    console.log('[socket::connection] sessKey:', sessKey);
+    console.log('===============');
+    (async () => {
+        const redisClient = Redis.createClient(redisPort, redisHost);
+        redisClient.connect().then(()=>{
+        }).catch((reason)=>{
+            console.error('[redisClient.connect] error reason:', reason);
+        });
+        let redisSession = await redisClient.get(userId).then((value) => {
+            console.log('[redisClient.get] value: ', value);
+            return value;
+        });
+        redisClient.quit().then();
+        if (redisSession !== sessKey) {
+            console.error('[socket::connection] Wrong sessKey. Socket close');
+            socket.close();
+            return;
+        }
+        if (!isIdInArray(userId, userClients)) {
+            let obj = {
+                'id': userId,
+            };
+            userClients.push(obj);
+        } else {
+            console.log('[socket::connection] reconnect userClient', userId);
+        }
+        if (!isIdInArray(softId, softClients)) {
+            let obj = {
+                'id':        softId,
+                'userId':    userId,
+                'inputId':   userId + '-' + softId,
+                'socket':    socket
+            };
+            socket.inputId = obj.inputId;
+            softClients.push(obj);
+        } else {
+            console.log('[socket::connection] reconnect softClient', softId);
+        }
+    })();
 
     socket.on(`message`, (clientMessage) => {
-        console.log(`[socket::message] > ${clientMessage}`);
+        //console.log(`[socket::message] > ${clientMessage}`);
         let inputMsg;
         try {
             inputMsg = JSON.parse(clientMessage.toLocaleString());
-            console.log('[socket::message] inputMsg', inputMsg);
+            //console.log('[socket::message] inputMsg', inputMsg);
         } catch (errors) {
             console.log('[socket::message] JSON.parse errors', errors);
             console.log('[socket::message] JSON.parse clientMessage.toLocaleString()', clientMessage.toLocaleString());
@@ -78,18 +143,18 @@ ws.on(`connection`, (socket, req) => {
 
         switch (inputMsg.module) {
             case"admin":
-                console.log('[socket::message] admin');
+                //console.log('[socket::message] admin');
                 module = new Admin(socket.inputId, inputMsg);
                 break;
             case"notice":
-                console.log('[socket::message] notice');
+                //console.log('[socket::message] notice');
                 module = new Notifier(socket.inputId, inputMsg);
                 break;
             case"chat":
-                console.log('[socket::message] chat');
+                //console.log('[socket::message] chat');
                 break;
             case"private":
-                console.log('[socket::message] private');
+                //console.log('[socket::message] private');
                 break;
         }
 
@@ -98,31 +163,31 @@ ws.on(`connection`, (socket, req) => {
 
     socket.on(`close`, () => {
         let closeClient;
-        console.log('[close] socket.inputId', socket.inputId);
-        console.log('count softClients: ', softClients.length);
+        //console.log('[close] socket.inputId', socket.inputId);
+        //console.log('count softClients: ', softClients.length);
         for (let i in softClients) {
-            console.log('softClients ['+i+']:', softClients[i].inputId);
+            //console.log('softClients ['+i+']:', softClients[i].inputId);
             if (softClients[i].inputId === socket.inputId) {
-                console.log('close inputId', softClients[i].inputId);
+                //console.log('close inputId', softClients[i].inputId);
                 closeClient = softClients.splice(i, 1);
             }
         }
-        console.log('splice count softClients: ', softClients.length);
-        console.log(`Клиент отключён ip: ${ip}`);
-        console.log(`closeClient:`, closeClient);
-        console.log(`userClients:`, userClients);
-        console.log(`softClients:`, softClients);
+        // console.log('splice count softClients: ', softClients.length);
+        // console.log(`Клиент отключён ip: ${ip}`);
+        // console.log(`closeClient:`, closeClient);
+        // console.log(`userClients:`, userClients);
+        // console.log(`softClients:`, softClients);
     });
 });
 
 function isIdInArray(id, itemList) {
     for (var i in itemList) {
         if (id === itemList[i].id) {
-            console.log('[isIdInArray] Item was found [' + i + ']. id', id);
+            //console.log('[isIdInArray] Item was found [' + i + ']. id', id);
             return true;
         }
     }
-    console.log('[isIdInArray] Item not found. id', id);
+    //console.log('[isIdInArray] Item not found. id', id);
     return false;
 }
 
@@ -139,7 +204,7 @@ class ModuleAbstract {
                 break;
             }
         }
-        console.log(`[module::constructor] sender`, this.sender);
+        // console.log(`[module::constructor] sender`, this.sender);
         if (typeof message.method == 'undefined' || !message.method) {
             throw new TypeError('Unknown property method in inputMessage');
         }
@@ -153,8 +218,8 @@ class ModuleAbstract {
     }
 
     checkMethod() {
-        console.log('[module::checkMethod] method', this.method);
-        console.log('[module::checkMethod] accessMethods', this.accessMethods);
+        // console.log('[module::checkMethod] method', this.method);
+        // console.log('[module::checkMethod] accessMethods', this.accessMethods);
         if (this.accessMethods.length && this.accessMethods.indexOf(this.method) < 0) {
             throw new TypeError('[module::checkMethod] Unknown method: ' +  this.method);
         }
@@ -182,7 +247,6 @@ class Admin extends ModuleAbstract{
     exec() {
         try {
             this.checkMethod();
-            console.log('[Admin::exec] accessMethods:', this.accessMethods);
             switch (this.method) {
                 case "userlist":
                     this.getUserList();
@@ -191,8 +255,7 @@ class Admin extends ModuleAbstract{
                     this.getCountUser();
                     break;
             }
-            console.log('[Admin::exec] send message:', this.message);
-            let sender = new Sender(this.userId, this.message);
+            let sender = new Sender(this.sender.userId, this.message);
             sender.send();
         } catch (e) {
             console.error(`[Admin::exec] Exception: ${e}`);
@@ -206,9 +269,7 @@ class Admin extends ModuleAbstract{
             sender:  this.sender.userId,
             message: userClients.length
         };
-        console.log('[Admin::getCountUser] options:', options);
         this.message = new ResponseMessage('admin', options);
-        console.log('[Admin::getCountUser] message:', this.message);
     }
 
     getUserList() {
@@ -266,9 +327,9 @@ class Notifier extends ModuleAbstract {
 
 class Sender {
     constructor(userId, message) {
-        console.log('[Sender::constructor] userId ', userId);
-        console.log('[Sender::constructor] message ', message);
-        console.log('[Sender::constructor] softClients.length ', softClients.length);
+        // console.log('[Sender::constructor] userId ', userId);
+        // console.log('[Sender::constructor] message ', message);
+        // console.log('[Sender::constructor] softClients.length ', softClients.length);
         if (typeof message == 'undefined' || !message) {
             throw new TypeError('[Sender] The message cannot be empty or undefined');
         }
