@@ -109,6 +109,7 @@ ws.on(`connection`, (socket, req) => {
         } else {
             console.log('[socket::connection] reconnect userClient', userId);
         }
+        console.log('[socket::connection] softId', softId);
         if (!isIdInArray(softId, softClients)) {
             let obj = {
                 'id':        softId,
@@ -121,6 +122,15 @@ ws.on(`connection`, (socket, req) => {
         } else {
             console.log('[socket::connection] reconnect softClient', softId);
         }
+        console.log('[socket::connection] socket.inputId', socket.inputId);
+        let msg = new ResponseMessage('connect', {
+            type:     'auth',
+            format:   'text',
+            sender:   userId,
+            message:  true
+        });
+        let sender = new Sender(userId, msg);
+        sender.send();
     })();
 
     socket.on(`message`, (clientMessage) => {
@@ -140,6 +150,8 @@ ws.on(`connection`, (socket, req) => {
         }
 
         let module;
+
+        console.log('[socket::message] socket.inputId:', socket.inputId);
 
         switch (inputMsg.module) {
             case"user":
@@ -161,8 +173,8 @@ ws.on(`connection`, (socket, req) => {
 
     socket.on(`close`, () => {
         let closeClient;
-        //console.log('[close] socket.inputId', socket.inputId);
-        //console.log('count softClients: ', softClients.length);
+        console.log('[close] socket.inputId', socket.inputId);
+        console.log('count softClients: ', softClients.length);
         for (let i in softClients) {
             //console.log('softClients ['+i+']:', softClients[i].inputId);
             if (softClients[i].inputId === socket.inputId) {
@@ -193,6 +205,8 @@ class ModuleAbstract {
     constructor(inputId, message) {
         this.sender        = null;
         this.accessMethods = [];
+        console.log('[ModuleAbstract::constructor] inputId:', inputId);
+        console.log('[ModuleAbstract::constructor] message:', message);
         for (var i in softClients) {
             if (inputId === softClients[i].inputId) {
                 this.sender = {
@@ -215,9 +229,10 @@ class ModuleAbstract {
         this.inputMessage = message;
 
         this.userId = null;
-        if (typeof message.userId == 'undefined' || !message.userId) {
+        if (typeof message.userId !== 'undefined' && message.userId) {
             this.userId = message.userId;
         }
+        console.log(`[module::constructor] this.userId`, this.userId);
     }
 
     checkMethod() {
@@ -245,6 +260,7 @@ class User extends ModuleAbstract {
         this.accessMethods = [
             'setData'
         ];
+        console.log('[User] this.sender:', this.sender);
     }
     setData() {
         let data    = {};
@@ -323,15 +339,15 @@ class Admin extends ModuleAbstract {
 class Notifier extends ModuleAbstract {
     constructor(inputId, message) {
         super(inputId, message);
-
         if (typeof message.text == 'undefined' || !message.text) {
             throw new TypeError('Unknown property text in inputMessage');
         }
-        this.text = message.text;
+        this.text   = message.text;
 
         this.defaultPriority = 5;
         this.accessMethods   = [
-            'notice'
+            'notice',
+            'noticeAll'
         ];
         console.log('[Notifier] this.inputMessage', this.inputMessage);
     }
@@ -340,33 +356,41 @@ class Notifier extends ModuleAbstract {
             this.checkMethod();
             switch (this.method) {
                 case "notice":
-                    this.sendNotice();
+                    //this.userId = message.userId;
+                    console.log('[Notifier::exec] notice this.userId', this.userId);
+                    this.makeNotice();
+                    let sender = new Sender(this.userId, this.message);
+                    sender.send();
                     break;
+                case "noticeAll":
+                    if (typeof this.inputMessage.userIds == 'undefined' || this.inputMessage.userIds.length === 0) {
+                        throw new TypeError('[Notifier::noticeAll] Unknown property userIds in inputMessage');
+                    }
+                    this.makeNotice();
+                    for (var z = 0; z < this.inputMessage.userIds.length; z++) {
+                        let userId = this.inputMessage.userIds[z];
+                        let sender = new Sender(userId, this.message);
+                        sender.send();
+                    }
             }
-            let sender = new Sender(this.userId, this.message);
-            sender.send();
         } catch (e) {
             console.error(`[Notifier::exec] Exception: ${e}`);
         }
     }
-    sendNotice() {
-        console.log('[Notifier::sendNotice] this.inputMessage', this.inputMessage);
+    makeNotice() {
         let options = {
-            type:     this.method,
+            type:     'notice',
             format:   'text',
             sender:   this.sender.userId,
             message:  this.text,
             priority: (this.inputMessage.hasOwnProperty('priority') && this.inputMessage.priority ? this.inputMessage.priority : this.defaultPriority)
         };
-        this.message = new ResponseMessage('admin', options);
+        this.message = new ResponseMessage('notice', options);
     }
 }
 
 class Sender {
     constructor(userId, message) {
-        // console.log('[Sender::constructor] userId ', userId);
-        // console.log('[Sender::constructor] message ', message);
-        // console.log('[Sender::constructor] softClients.length ', softClients.length);
         if (typeof message == 'undefined' || !message) {
             throw new TypeError('[Sender] The message cannot be empty or undefined');
         }
@@ -377,8 +401,8 @@ class Sender {
     send() {
         for (var i in softClients) {
             if (this.userId == softClients[i].userId) {
-                console.log('[Sender::send] userId was found [' + i + ']. inputId', softClients[i].inputId);
-                console.log('['+i+'] send:', this.message)
+                // console.log('[Sender::send] userId was found [' + i + ']. inputId', softClients[i].inputId);
+                console.log(this.userId + '['+i+'] send:', this.message)
                 softClients[i].socket.send(this.message);
             }
         }
@@ -389,6 +413,5 @@ class ResponseMessage {
     constructor(module, options) {
         this.module  = module;
         this.options = options;
-        console.log('[ResponseMessage]:', this);
     }
 }
