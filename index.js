@@ -122,7 +122,6 @@ ws.on(`connection`, (socket, req) => {
         } else {
             console.log('[socket::connection] reconnect softClient', softId);
         }
-        console.log('[socket::connection] socket.inputId', socket.inputId);
         let msg = new ResponseMessage('connect', {
             type:     'auth',
             format:   'text',
@@ -151,8 +150,6 @@ ws.on(`connection`, (socket, req) => {
 
         let module;
 
-        console.log('[socket::message] socket.inputId:', socket.inputId);
-
         switch (inputMsg.module) {
             case"user":
                 module = new User(socket.inputId, inputMsg);
@@ -173,20 +170,16 @@ ws.on(`connection`, (socket, req) => {
 
     socket.on(`close`, () => {
         let closeClient;
-        console.log('[close] socket.inputId', socket.inputId);
-        console.log('count softClients: ', softClients.length);
         for (let i in softClients) {
-            //console.log('softClients ['+i+']:', softClients[i].inputId);
             if (softClients[i].inputId === socket.inputId) {
-                //console.log('close inputId', softClients[i].inputId);
                 closeClient = softClients.splice(i, 1);
+                for (let x = 0; x < userClients.length; x++) {
+                    if (String(userClients[x].id) === String(closeClient[0].userId)) {
+                        closeUser = userClients.splice(x, 1);
+                    }
+                }
             }
         }
-        // console.log('splice count softClients: ', softClients.length);
-        // console.log(`Клиент отключён ip: ${ip}`);
-        // console.log(`closeClient:`, closeClient);
-        // console.log(`userClients:`, userClients);
-        // console.log(`softClients:`, softClients);
     });
 });
 
@@ -205,8 +198,6 @@ class ModuleAbstract {
     constructor(inputId, message) {
         this.sender        = null;
         this.accessMethods = [];
-        console.log('[ModuleAbstract::constructor] inputId:', inputId);
-        console.log('[ModuleAbstract::constructor] message:', message);
         for (var i in softClients) {
             if (inputId === softClients[i].inputId) {
                 this.sender = {
@@ -236,8 +227,6 @@ class ModuleAbstract {
     }
 
     checkMethod() {
-        // console.log('[module::checkMethod] method', this.method);
-        // console.log('[module::checkMethod] accessMethods', this.accessMethods);
         if (this.accessMethods.length && this.accessMethods.indexOf(this.method) < 0) {
             throw new TypeError('[module::checkMethod] Unknown method: ' +  this.method);
         }
@@ -279,10 +268,19 @@ class User extends ModuleAbstract {
             if (this.sender.userId === userClients[i].id) {
                 userClients[i].isAdmin = isAdmin;
                 userClients[i].data    = data;
-                console.log('[setData] userClients', userClients[i]);
-                return true;
+                console.log('[User::setData] userClients', userClients[i]);
+                break;
             }
         }
+        let msg = new ResponseMessage('user', {
+            type:     'setData',
+            format:   'text',
+            sender:   this.sender.userId,
+            message:  true
+        });
+        console.log('[User::setData] ResponseMessage', msg);
+        let sender = new Sender(this.sender.userId, msg);
+        sender.send();
     }
 }
 
@@ -320,7 +318,8 @@ class Admin extends ModuleAbstract {
             type:    this.method,
             format:  'text',
             sender:  this.sender.userId,
-            message: userClients.length
+            message: userClients.length,
+            softClients: softClients.length
         };
         this.message = new ResponseMessage('admin', options);
     }
@@ -330,7 +329,8 @@ class Admin extends ModuleAbstract {
             type:    this.method,
             format:  'json',
             sender:  this.sender.userId,
-            message: JSON.stringify(userClients)
+            message: JSON.stringify(userClients),
+            softClients: JSON.stringify(softClients)
         };
         this.message = new ResponseMessage('admin', options);
     }
