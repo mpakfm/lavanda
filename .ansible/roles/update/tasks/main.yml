@@ -1,0 +1,6 @@
+- name: Checkout source code
+  git: 
+    repo: "https://{{ deployer_gitlab }}/{{ lookup('env', 'CI_PROJECT_PATH') }}"
+    dest: "{{ lookup('env', 'PROJECT_DIR') }}"
+    version: "{{ lookup('env', 'CI_COMMIT_REF_NAME') }}"
+  become_user: '{{ deployer_user }}'
