@@ -10,13 +10,14 @@ console.log(dt.getHours() + ":" + dt.getMinutes() + ":" + dt.getSeconds() + "\t"
 var redisPort = 6379;
 var redisHost = '127.0.0.1';
 
+
 const Redis = require("redis");
 
 const WebSocket = require(`ws`);
 const path  = require(`path`);
 const http  = require(`http`);
 
-const PORT = 3000;
+const PORT = 3001;
 const server = http.createServer(app);
 const ws = new WebSocket.Server({ server });
 
