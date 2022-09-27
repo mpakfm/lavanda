@@ -17,7 +17,7 @@ const WebSocket = require(`ws`);
 const path  = require(`path`);
 const http  = require(`http`);
 
-const PORT = 3001;
+const PORT = 3000;
 const server = http.createServer(app);
 const ws = new WebSocket.Server({ server });
 
