@@ -1,0 +1,35 @@
+stages:
+  - update
+
+Update code:
+  stage: update
+  variables:
+    CI_DEBUG_TRACE: "false"
+    GIT_SUBMODULE_STRATEGY: recursive
+  only:
+    - master
+  except:
+    - schedules
+  tags:
+    - ansible
+  allow_failure: false
+  when: manual
+  script:
+    - update_code
+
+# ---------------------------------------------------------------------------
+.auto_devops: &auto_devops |
+  # Auto DevOps variables and functions
+  
+  update_code() {
+    cd .ansible
+
+    echo -e "${PROJECT_HOST} ansible_ssh_user=envadm" > hosts
+
+    cat hosts
+
+    ansible-playbook update.yml
+  }
+
+before_script:
+  - *auto_devops
