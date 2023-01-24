@@ -214,3 +214,24 @@ client.connection.sendUTF(JSON.stringify({
     text: 'Проверка связи'
 }));
 ```
+
+Метод **getHistory** - получение списка всех своих уведомлений.
+
+```javascript
+client.connection.sendUTF(JSON.stringify({
+    module: 'notice',
+    method: 'getHistory',
+    userId: 1
+}));
+```
+
+Метод **update** - изменение одного сообщения. Сообщение для обновления должно быть приведено к строке и отправлено в параметре text. Это сообщение не проверяется и неизменяется, как пришло, так и сохарняется в Redis по ключу клиента. Проверяется только отправитель, что бы установить ключ: для уведомлений или для личных сообщений. Ответственность за даные несет клиент отправивший сообщений. 
+
+```javascript
+client.connection.sendUTF(JSON.stringify({
+    module: 'notice',
+    method: 'update',
+    userId: 1,
+    text: '{"module":"notice","options":{"type":"notice","format":"text","sender":"2","message":"[2023.0.24 17:55] Уведомление о том что всё работает!","priority":5},"dt":1674572118270,"isRead":false}'
+}));
+```
