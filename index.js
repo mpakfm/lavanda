@@ -29,7 +29,7 @@ var redisPort = process.env.REDIS_PORT;
 var redisHost = process.env.REDIS_HOST;
 var redisDb   = process.env.REDIS_DB;
 
-var noticeClientId   = process.env.NOTICE_CLIENT_ID;
+var noticeClientId = process.env.NOTICE_CLIENT_ID;
 
 const Redis = require("redis");
 
@@ -42,6 +42,8 @@ const server = http.createServer(app);
 const ws = new WebSocket.Server({ server });
 
 const accessModules = ['admin', 'chat', 'notice', 'private'];
+
+let tmpCnt = 0;
 
 /** @var array Список клиентов-пользователей */
 global.userClients = [];
@@ -56,29 +58,37 @@ global.noticeClientId  = noticeClientId;
 global.Sender          = Sender;
 global.ResponseMessage = ResponseMessage;
 
+const redisClient = Redis.createClient(redisPort, redisHost);
+redisClient.connect().then(()=>{
+}).catch((reason)=>{
+    console.error('!!! [INDEX redisClient.connect] error reason:', reason);
+});
+redisClient.select(redisDb);
+
 server.listen(PORT, (hostname) => {
-    console.log(`[server::listen] Ожидаю подключений на хост ${hostname}:${PORT}`);
+    //console.log(`[server::listen] Ожидаю подключений на хост ${hostname}:${PORT}`);
 });
 ws.on(`connection`, (socket, req) => {
     const {remoteAddress: ip} = req.socket;
-    console.log('===============');
+    //console.log('===============');
+    tmpCnt++;
     let sessKey = null;
     let userId  = null;
     let softId  = null;
     if (req.url === '') {
-        console.error('[socket::connection] Unknown userId. Socket close');
+        console.error('!!! [socket::connection] Unknown userId. Socket close');
         socket.close();
         return;
     }
     let n = req.url.indexOf('?');
     if (n < 0) {
-        console.error('[socket::connection] Query string is not found. Socket close');
+        console.error('!!! [socket::connection] Query string is not found. Socket close');
         socket.close();
         return;
     }
     let query = req.url.slice((n+1)).split('&');
     if (!query.length) {
-        console.error('[socket::connection] Params not found. Socket close');
+        console.error('!!! [socket::connection] Params not found. Socket close');
         socket.close();
         return;
     }
@@ -91,18 +101,19 @@ ws.on(`connection`, (socket, req) => {
             softId = part[1];
         }
     }
-    console.log('[socket::connection] userId:', userId);
-    console.log('[socket::connection] softId:', softId);
-    console.log('===============');
+    //console.log('[INDEX socket::connection] userClients', userClients);
+
+    //console.log('[INDEX socket::connection] userId:', userId);
+    //console.log('[INDEX socket::connection] softId:', softId);
     if (!userId || !softId) {
-        console.error('[socket::connection] Unknown userId. Socket close');
+        console.error('!!! [INDEX socket::connection] Unknown userId. Socket close');
         socket.close();
         return;
     }
 
     if (typeof req.headers.sessid === 'undefined' || !req.headers.sessid) {
         if (typeof req.headers['sec-websocket-protocol'] === 'undefined' || req.headers['sec-websocket-protocol'] === '') {
-            console.error('[socket::connection] Unknown sessKey. Socket close');
+            console.error('!!! [INDEX socket::connection] Unknown sessKey. Socket close');
             socket.close();
             return;
         } else {
@@ -112,35 +123,29 @@ ws.on(`connection`, (socket, req) => {
         sessKey = req.headers.sessid;
     }
     let baseId = 'LAVANDA:CLIENTID:';
-    console.log('[socket::connection] sessKey:', sessKey);
-    console.log('===============');
+    //console.log('[INDEX socket::connection] sessKey:', sessKey);
+    //console.log('=====');
     (async () => {
-        const redisClient = Redis.createClient(redisPort, redisHost);
-        redisClient.connect().then(()=>{
-        }).catch((reason)=>{
-            console.error('[redisClient.connect] error reason:', reason);
-        });
-        redisClient.select(redisDb);
-        console.log('get userId', userId);
+
+        //console.log('[INDEX redis] get userId:', userId);
         let redisSession = await redisClient.get(baseId + userId).then((value) => {
-            console.log('[redisClient.get] value: ', value);
+            //console.log('[INDEX redis] value:', value);
             return value;
         });
-        redisClient.quit().then();
         if (redisSession !== sessKey) {
-            console.error('[socket::connection] Wrong sessKey. Socket close');
+            console.error('!!! [INDEX socket::connection] Wrong sessKey. Socket close');
             socket.close();
             return;
         }
         if (!functions.isIdInArray(userId, userClients)) {
+            //console.log('[INDEX redis] new userClient', userId);
             let obj = {
                 'id': userId,
             };
             userClients.push(obj);
         } else {
-            console.log('[socket::connection] reconnect userClient', userId);
+            console.log('[INDEX redis] reconnect userClient', userId);
         }
-        console.log('[socket::connection] softId', softId);
         if (!functions.isIdInArray(softId, softClients)) {
             let obj = {
                 'id':        softId,
@@ -150,8 +155,6 @@ ws.on(`connection`, (socket, req) => {
             };
             socket.inputId = obj.inputId;
             softClients.push(obj);
-        } else {
-            console.log('[socket::connection] reconnect softClient', softId);
         }
         let msg = new ResponseMessage('connect', {
             type:     'auth',
@@ -170,12 +173,12 @@ ws.on(`connection`, (socket, req) => {
             inputMsg = JSON.parse(clientMessage.toLocaleString());
             //console.log('[socket::message] inputMsg', inputMsg);
         } catch (errors) {
-            console.log('[socket::message] JSON.parse errors', errors);
-            console.log('[socket::message] JSON.parse clientMessage.toLocaleString()', clientMessage.toLocaleString());
+            console.log('!!! [INDEX socket::message] JSON.parse errors', errors);
+            console.log('!!! [INDEX socket::message] JSON.parse clientMessage.toLocaleString()', clientMessage.toLocaleString());
         }
 
         if (typeof inputMsg.module == 'undefined') {
-            console.error('[socket::message] unknown module');
+            console.error('!!! [INDEX socket::message] unknown module');
             return;
         }
 
@@ -200,6 +203,7 @@ ws.on(`connection`, (socket, req) => {
     });
 
     socket.on(`close`, () => {
+        //console.log('[INDEX socket::close] socket.inputId', socket.inputId);
         let closeClient;
         for (let i in softClients) {
             if (softClients[i].inputId === socket.inputId) {
@@ -213,3 +217,5 @@ ws.on(`connection`, (socket, req) => {
         }
     });
 });
+
+//redisClient.quit().then();

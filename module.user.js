@@ -15,6 +15,7 @@ class User extends ModuleAbstract {
         ];
     }
     setData() {
+        //console.log('[User::setData] ID('+this.sender.userId+') inputMessage', this.inputMessage);
         let data    = {};
         let isAdmin = false;
         for (var i in this.inputMessage) {
@@ -42,6 +43,7 @@ class User extends ModuleAbstract {
         });
         let sender = new Sender(this.sender.userId, msg);
         sender.send();
+        //console.log('[User::setData] finish userClients', userClients);
     }
 }
 

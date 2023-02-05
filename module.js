@@ -7,6 +7,8 @@
 
 class ModuleAbstract {
     constructor(inputId, message) {
+        //console.log(`[module::constructor] inputId`, inputId);
+
         this.sender        = null;
         this.accessMethods = [];
         for (var i in softClients) {
@@ -18,6 +20,7 @@ class ModuleAbstract {
                 for (var z in userClients) {
                     if (softClients[i].userId === userClients[z].id) {
                         this.sender.data = userClients[z];
+                        break;
                     }
                 }
                 break;
@@ -34,7 +37,8 @@ class ModuleAbstract {
         if (typeof message.userId !== 'undefined' && message.userId) {
             this.userId = message.userId;
         }
-        console.log(`[module::constructor] this.userId`, this.userId);
+        //console.log(`[module::constructor] this.userId`, this.userId);
+        //console.log(`[module::constructor] this.sender`, this.sender);
     }
 
     checkMethod() {
@@ -46,10 +50,10 @@ class ModuleAbstract {
     exec() {
         try {
             let methodName = this.method;
-            console.log('[module::exec] methodName:', methodName);
+            //console.log('[module::exec] methodName:', methodName);
             this[methodName]();
         } catch (e) {
-            console.error(`[module::exec] Exception: ${e}`);
+            console.error(`!!! [module::exec] Exception: ${e}`);
         }
     }
 }

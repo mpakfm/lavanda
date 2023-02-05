@@ -11,8 +11,8 @@ const ResponseMessage = require("./response.message");
 
 class Notifier extends ModuleAbstract {
     constructor(inputId, message) {
-        console.log('[Notifier] inputId', inputId);
-        console.log('[Notifier] message', message);
+        //console.log('[Notifier] inputId', inputId);
+        //console.log('[Notifier] message', message);
         super(inputId, message);
 
         this.text            = null;
@@ -39,38 +39,52 @@ class Notifier extends ModuleAbstract {
                     this.getFromRedis(this.userId);
                     break;
                 case"update":
-                    console.log('[Notifier::update] this.inputMessage', this.inputMessage);
+                    //console.log('[Notifier::update] this.inputMessage', this.inputMessage);
                     let updateMsg = JSON.parse(this.inputMessage.text);
-                    console.log('[Notifier::update] updateMsg', updateMsg);
+                    //console.log('[Notifier::update] updateMsg', updateMsg);
                     this.updateIntoRedis(this.userId, updateMsg)
                     break;
                 case "notice":
-                    this.makeNotice();
+                    this.makeNotice(this.sender.userId);
                     this.saveToRedis(this.userId);
                     let sender = new Sender(this.userId, this.message);
                     sender.send();
                     break;
                 case "noticeAll":
-                    if (typeof this.inputMessage.userIds == 'undefined' || this.inputMessage.userIds.length === 0) {
-                        throw new TypeError('[Notifier::noticeAll] Unknown property userIds in inputMessage');
+                    // if (typeof this.inputMessage.userIds == 'undefined' || this.inputMessage.userIds.length === 0) {
+                    //     throw new TypeError('[Notifier::noticeAll] Unknown property userIds in inputMessage');
+                    // }
+                    //console.log('[Notifier::noticeAll] this.sender.userId', this.sender.userId);
+                    //console.log('[Notifier::noticeAll] this.sender.data', this.sender.data);
+                    if (typeof this.sender.data.isAdmin == 'undefined' || !this.sender.data.isAdmin) {
+                        throw new TypeError('[Notifier::noticeAll] Access denied.');
                     }
-                    this.makeNotice();
-                    for (var z = 0; z < this.inputMessage.userIds.length; z++) {
-                        let userId = this.inputMessage.userIds[z];
-                        this.saveToRedis(this.userId);
-                        let sender = new Sender(userId, this.message);
-                        sender.send();
+                    this.makeNotice(noticeClientId);
+                    if (typeof this.inputMessage.userIds == 'undefined' || this.inputMessage.userIds == null || this.inputMessage.userIds.length === 0) {
+                        for (var z = 0; z < userClients.length; z++) {
+                            let userId = userClients[z].id;
+                            this.saveToRedis(userId);
+                            let sender = new Sender(userId, this.message);
+                            sender.send();
+                        }
+                    } else {
+                        for (var z = 0; z < this.inputMessage.userIds.length; z++) {
+                            let userId = this.inputMessage.userIds[z];
+                            this.saveToRedis(userId);
+                            let sender = new Sender(userId, this.message);
+                            sender.send();
+                        }
                     }
             }
         } catch (e) {
             console.error(`[Notifier::exec] Exception: ${e}`);
         }
     }
-    makeNotice() {
+    makeNotice(senderId) {
         let options = {
             type:     'notice',
             format:   'text',
-            sender:   this.sender.userId,
+            sender:   senderId,
             message:  this.text,
             priority: (this.inputMessage.hasOwnProperty('priority') && this.inputMessage.priority ? this.inputMessage.priority : this.defaultPriority)
         };
@@ -123,9 +137,9 @@ class Notifier extends ModuleAbstract {
             console.error('[redisClient.connect] error reason:', reason);
         });
         rclient.select(redisDb);
-        console.log('[updateIntoRedis] userId', userId);
-        console.log('[updateIntoRedis] notice.options.sender', notice.options.sender);
-        console.log('[updateIntoRedis] this.sender.userId', this.sender.userId);
+        //console.log('[updateIntoRedis] userId', userId);
+        //console.log('[updateIntoRedis] notice.options.sender', notice.options.sender);
+        //console.log('[updateIntoRedis] this.sender.userId', this.sender.userId);
         let key;
         if (noticeClientId === notice.options.sender) {
             key = notifyId + userId;
@@ -152,9 +166,9 @@ class Notifier extends ModuleAbstract {
 
         let msg = this.message.toString(); //JSON.stringify
         let key;
-        if (noticeClientId === this.sender.userId) {
+        if (noticeClientId === this.message.options.sender) {
             key = notifyId + userId;
-            console.log('[saveToRedis] NOTIFY key', key);
+            //console.log('[saveToRedis] NOTIFY key', key);
             rclient.zAdd(String(key), {
                 score: new Date().getTime(),
                 value: String(msg)
@@ -162,8 +176,8 @@ class Notifier extends ModuleAbstract {
                 console.error('[rclient.zAdd] error reason:', reason);
             });
         } else {
-            key = messageId + this.sender.userId;
-            console.log('[saveToRedis] MSG key sender', key);
+            key = messageId + this.message.options.sender;
+            //console.log('[saveToRedis] MSG key sender', key);
             rclient.zAdd(String(key), {
                 score: new Date().getTime(),
                 value: String(msg)
@@ -171,7 +185,7 @@ class Notifier extends ModuleAbstract {
                 console.error('[rclient.zAdd] error reason:', reason);
             });
             key = messageId + userId;
-            console.log('[saveToRedis] MSG key recipent', key);
+            //console.log('[saveToRedis] MSG key recipent', key);
             rclient.zAdd(String(key), {
                 score: new Date().getTime(),
                 value: String(msg)
