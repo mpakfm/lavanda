@@ -205,6 +205,7 @@ client.connection.sendUTF(JSON.stringify({
 ```
 
 Метод **noticeAll** - отправка сообщения большому количеству адресатов.
+Параметр userIds - необязательный. Если он не передан, сообщения отправляются всем подключенным клиентам веб-сокета.
 
 ```javascript
 client.connection.sendUTF(JSON.stringify({

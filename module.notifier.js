@@ -88,7 +88,6 @@ class Notifier extends ModuleAbstract {
             message:  this.text,
             priority: (this.inputMessage.hasOwnProperty('priority') && this.inputMessage.priority ? this.inputMessage.priority : this.defaultPriority)
         };
-        //this.message = new ResponseMessage('notice', options);
         this.message = new Notice('notice', options);
         this.message.setTimestamp();
         this.message.setIsRead();
@@ -137,9 +136,7 @@ class Notifier extends ModuleAbstract {
             console.error('[redisClient.connect] error reason:', reason);
         });
         rclient.select(redisDb);
-        //console.log('[updateIntoRedis] userId', userId);
-        //console.log('[updateIntoRedis] notice.options.sender', notice.options.sender);
-        //console.log('[updateIntoRedis] this.sender.userId', this.sender.userId);
+
         let key;
         if (noticeClientId === notice.options.sender) {
             key = notifyId + userId;
@@ -177,7 +174,6 @@ class Notifier extends ModuleAbstract {
             });
         } else {
             key = messageId + this.message.options.sender;
-            //console.log('[saveToRedis] MSG key sender', key);
             rclient.zAdd(String(key), {
                 score: new Date().getTime(),
                 value: String(msg)
@@ -185,7 +181,6 @@ class Notifier extends ModuleAbstract {
                 console.error('[rclient.zAdd] error reason:', reason);
             });
             key = messageId + userId;
-            //console.log('[saveToRedis] MSG key recipent', key);
             rclient.zAdd(String(key), {
                 score: new Date().getTime(),
                 value: String(msg)

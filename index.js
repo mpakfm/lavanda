@@ -5,7 +5,9 @@
  * Date:    02.08.2022
  */
 
-require('dotenv').config();
+const path = require('path')
+console.log('path:', path.resolve(__dirname, '.env'));
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 // Подключаем express
 const express = require ('express');
@@ -34,7 +36,6 @@ var noticeClientId = process.env.NOTICE_CLIENT_ID;
 const Redis = require("redis");
 
 const WebSocket = require(`ws`);
-const path  = require(`path`);
 const http  = require(`http`);
 
 const PORT = process.env.PORT;
